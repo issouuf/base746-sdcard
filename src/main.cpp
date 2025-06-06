@@ -7,21 +7,35 @@
 #define SCLK D13
 #define CS D10
 
+
+
+void update_affichage_score_tour(); 
+
+int tour =0;
+uint16_t dernièrePosition = 0;
+
+
 static void event_handler(lv_event_t *e)
 {
   lv_event_code_t code = lv_event_get_code(e);
 
   if (code == LV_EVENT_CLICKED)
   {
-    LV_LOG_USER("Clicked");
+    //LV_LOG_USER("Clicked");
+    tour = 0;
+    update_affichage_score_tour();
   }
   else if (code == LV_EVENT_VALUE_CHANGED)
   {
-    LV_LOG_USER("Toggled");
+    //LV_LOG_USER("Toggled");
   }
 }
 
 void testLvgl()
+
+
+
+
 {
   // Initialisations générales
   lv_obj_t *label;
@@ -32,19 +46,67 @@ void testLvgl()
   lv_obj_remove_flag(btn1, LV_OBJ_FLAG_PRESS_LOCK);
 
   label = lv_label_create(btn1);
-  lv_label_set_text(label, "Button");
+  lv_label_set_text(label, "reset tour");
   lv_obj_center(label);
 
-  lv_obj_t *btn2 = lv_button_create(lv_screen_active());
-  lv_obj_add_event_cb(btn2, event_handler, LV_EVENT_ALL, NULL);
-  lv_obj_align(btn2, LV_ALIGN_CENTER, 0, 40);
-  lv_obj_add_flag(btn2, LV_OBJ_FLAG_CHECKABLE);
-  lv_obj_set_height(btn2, LV_SIZE_CONTENT);
+  // lv_obj_t *btn2 = lv_button_create(lv_screen_active());
+  // lv_obj_add_event_cb(btn2, event_handler, LV_EVENT_ALL, NULL);
+  // lv_obj_align(btn2, LV_ALIGN_CENTER, 0, 40);
+  // lv_obj_add_flag(btn2, LV_OBJ_FLAG_CHECKABLE);
+  // lv_obj_set_height(btn2, LV_SIZE_CONTENT);
 
-  label = lv_label_create(btn2);
-  lv_label_set_text(label, "Toggle");
-  lv_obj_center(label);
+  // label = lv_label_create(btn2);
+  // lv_label_set_text(label, "Toggle");
+  // lv_obj_center(label);
 }
+
+
+void boutonResetTour() {
+    // Initialisations générales
+  lv_obj_t *label;
+
+  lv_obj_t *btn1 = lv_button_create(lv_screen_active());
+  lv_obj_add_event_cb(btn1, event_handler, LV_EVENT_ALL, NULL);
+  lv_obj_align(btn1, LV_ALIGN_CENTER, 0, -40);
+  lv_obj_remove_flag(btn1, LV_OBJ_FLAG_PRESS_LOCK);
+
+  label = lv_label_create(btn1);
+  lv_label_set_text(label, "reset tour");
+  lv_obj_center(label);
+
+} 
+
+
+
+static lv_obj_t *label_tour = NULL;
+
+// void affichage_score_tour() {
+//   // Supprime le label précédent s'il existe
+//   if (label_tour != NULL) {
+//     lv_obj_del(label_tour);
+//     label_tour = NULL;
+//   }
+//   // Crée un nouveau label
+//   label_tour = lv_label_create(lv_screen_active());
+//   lv_label_set_text_fmt(label_tour, "Tour: %d", tour);
+//   lv_obj_align(label_tour, LV_ALIGN_TOP_MID, 0, 10);
+// }
+
+void init_affichage_score_tour() {
+  label_tour = lv_label_create(lv_screen_active());
+  lv_label_set_text_fmt(label_tour, "Tour: %d", tour);
+  lv_obj_align(label_tour, LV_ALIGN_TOP_MID, 0, 10);
+}
+
+// À appeler à chaque changement de tour
+void update_affichage_score_tour() {
+  if(label_tour) {
+    lv_label_set_text_fmt(label_tour, "Tour: %d", tour);
+  }
+}
+
+
+
 
 #ifdef ARDUINO
 
@@ -82,6 +144,22 @@ uint16_t command = 0xFFFF; // NOP pour récupérer la dernière valeur lue
 }
 
 
+void affichage(void *pvParameters)
+{
+  // Init
+  TickType_t xLastWakeTime;
+  // Lecture du nombre de ticks quand la tâche débute
+  xLastWakeTime = xTaskGetTickCount();
+  while (1)
+  {
+    // Loop
+    update_affichage_score_tour();
+
+    // Endort la tâche pendant le temps restant par rapport au réveil,
+    // ici 200ms, donc la tâche s'effectue toutes les 200ms
+    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(200)); // toutes les 100 ms
+  }
+}
 
 void myTask(void *pvParameters)
 {
@@ -93,16 +171,34 @@ void myTask(void *pvParameters)
   {
     // Loop
 
-      //? test lecture de la postion
-  uint16_t position = as5047d_read();
-  Serial.print("Position: ");
-  Serial.println(position); 
+    //? test lecture de la postion
+    //! valeur max = 16383 (0x3FFF) ou 2^14 -1
+
+    uint16_t position = as5047d_read();
+    // Serial.print("Position: ");
+    // Serial.println(position); 
+
+    int16_t delta = position - dernièrePosition;
+
+    if(delta > 8192) {
+      tour --;
+    }else if (delta < -8192) {
+      tour ++;
+    }
+    dernièrePosition = position;
+
+    Serial.print("Tour: ");
+    Serial.println(tour);
+
 
     // Endort la tâche pendant le temps restant par rapport au réveil,
     // ici 200ms, donc la tâche s'effectue toutes les 200ms
     vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(10)); // toutes les 10 ms
   }
 }
+
+
+
 
 Sd2Card card;
 SdFatFs fatFs;
@@ -111,6 +207,7 @@ void mySetup()
 {  
   
   as5047d_init();
+
 
   
   bool disp = false;
@@ -187,7 +284,12 @@ void mySetup()
 
   lv_obj_align(icon, LV_ALIGN_CENTER, 0, 0);
 
-  testLvgl();
+  //testLvgl();
+  init_affichage_score_tour();
+  boutonResetTour();
+
+
+  xTaskCreate(affichage, "Affichage", 2048, NULL, 1, NULL);
 
 }
 
