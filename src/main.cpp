@@ -12,8 +12,12 @@
 void update_affichage_score_tour(); 
 
 int tour =0;
+int bp =0;
 uint16_t dernièrePosition = 0;
 
+
+
+lv_obj_t *icon = NULL;
 
 static void event_handler(lv_event_t *e)
 {
@@ -22,13 +26,13 @@ static void event_handler(lv_event_t *e)
   if (code == LV_EVENT_CLICKED)
   {
     //LV_LOG_USER("Clicked");
-    tour = 0;
-    update_affichage_score_tour();
-  }
-  else if (code == LV_EVENT_VALUE_CHANGED)
-  {
-    //LV_LOG_USER("Toggled");
-  }
+    bp=1;
+    // update_affichage_score_tour();
+  // }
+  // else if (code == LV_EVENT_VALUE_CHANGED)
+  // {
+  //   //LV_LOG_USER("Toggled");
+   }
 }
 
 void testLvgl()
@@ -144,6 +148,15 @@ uint16_t command = 0xFFFF; // NOP pour récupérer la dernière valeur lue
 }
 
 
+
+void update_image_rotation(uint16_t position) {
+    if(icon) {
+        // 0..16383 -> 0..3600 (dixièmes de degré)
+        int32_t angle = (position * 3600) / 16384;
+        lv_img_set_angle(icon, angle);
+    }
+}
+
 void affichage(void *pvParameters)
 {
   // Init
@@ -155,11 +168,15 @@ void affichage(void *pvParameters)
     // Loop
     update_affichage_score_tour();
 
+
     // Endort la tâche pendant le temps restant par rapport au réveil,
     // ici 200ms, donc la tâche s'effectue toutes les 200ms
-    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(200)); // toutes les 100 ms
+    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(200)); // toutes les 200 ms
   }
 }
+
+
+
 
 void myTask(void *pvParameters)
 {
@@ -180,15 +197,21 @@ void myTask(void *pvParameters)
 
     int16_t delta = position - dernièrePosition;
 
-    if(delta > 8192) {
+    if(bp ==1) {
+      tour = 0;
+      bp= 0;
+    }
+
+    else if(delta > 8192) {
       tour --;
     }else if (delta < -8192) {
       tour ++;
     }
     dernièrePosition = position;
 
-    Serial.print("Tour: ");
-    Serial.println(tour);
+    // Serial.print("Tour: ");
+    // Serial.println(tour);
+
 
 
     // Endort la tâche pendant le temps restant par rapport au réveil,
@@ -277,7 +300,7 @@ void mySetup()
 
   lv_tjpgd_init();
 
-  lv_obj_t *icon = lv_image_create(lv_screen_active());
+  icon = lv_image_create(lv_screen_active());
 
   /*From file*/
   lv_image_set_src(icon, "A:/minion5.bmp");
@@ -287,9 +310,10 @@ void mySetup()
   //testLvgl();
   init_affichage_score_tour();
   boutonResetTour();
+  
 
 
-  xTaskCreate(affichage, "Affichage", 2048, NULL, 1, NULL);
+  xTaskCreate(affichage, "Affichage", 4096, NULL, 2, NULL);
 
 }
 
