@@ -1,4 +1,11 @@
 #include "lvgl.h"
+#include "SPI.h"
+
+
+#define MOSI D11
+#define MISO D12
+#define SCLK D13
+#define CS D10
 
 static void event_handler(lv_event_t *e)
 {
@@ -44,22 +51,37 @@ void testLvgl()
 #include "lvglDrivers.h"
 #include "STM32SD.h"
 
-// // à décommenter pour tester la démo
-// // #include "demos/lv_demos.h"
 
-// void mySetup()
-// {
-//   // à décommenter pour tester la démo
-//   // lv_demo_widgets();
+void as5047d_init() {
+  pinMode(CS, OUTPUT);
+  digitalWrite(CS, HIGH); // Désactive le CS
 
-//   // Initialisations générales
-//   testLvgl();
-// }
+  SPI.begin();
+  SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE1)); // 1 MHz, MSB first, mode 3!
+}
 
-// void loop()
-// {
-//   // Inactif (pour mise en veille du processeur)
-// }
+
+uint16_t as5047d_read() {
+uint16_t command = 0xFFFF; // NOP pour récupérer la dernière valeur lue
+  uint16_t angle = 0;
+
+  // 1. Envoi de la commande de lecture d'angle (0x3FFF)
+  digitalWrite(CS, LOW);
+  SPI.transfer16(0x3FFF);
+  digitalWrite(CS, HIGH);
+
+  delayMicroseconds(1);
+
+  // 2. Lecture de la réponse lors d'un NOP
+  digitalWrite(CS, LOW);
+  angle = SPI.transfer16(command);
+  digitalWrite(CS, HIGH);
+
+  // Les 14 bits de poids faible contiennent l'angle
+  return angle & 0x3FFF;
+}
+
+
 
 void myTask(void *pvParameters)
 {
@@ -71,9 +93,14 @@ void myTask(void *pvParameters)
   {
     // Loop
 
+      //? test lecture de la postion
+  uint16_t position = as5047d_read();
+  Serial.print("Position: ");
+  Serial.println(position); 
+
     // Endort la tâche pendant le temps restant par rapport au réveil,
     // ici 200ms, donc la tâche s'effectue toutes les 200ms
-    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(200)); // toutes les 200 ms
+    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(10)); // toutes les 10 ms
   }
 }
 
@@ -81,7 +108,12 @@ Sd2Card card;
 SdFatFs fatFs;
 
 void mySetup()
-{  bool disp = false;
+{  
+  
+  as5047d_init();
+
+  
+  bool disp = false;
 
   Serial.print("\nInitializing SD card...");
   while (!card.init(SD_DETECT_PIN))
@@ -156,6 +188,7 @@ void mySetup()
   lv_obj_align(icon, LV_ALIGN_CENTER, 0, 0);
 
   testLvgl();
+
 }
 
 void loop(void)
