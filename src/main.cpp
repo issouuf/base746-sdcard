@@ -11,14 +11,106 @@
 
 void update_affichage_score_tour(); 
 void maj_arc_progression(uint16_t position);
+void show_page_tours();
+void show_page_arc();
 
 volatile int tour =0;
 volatile int bp =0;
 uint16_t dernièrePosition = 0;
 
 
+lv_obj_t *page_tours = NULL;
+lv_obj_t *page_arc = NULL;
+lv_obj_t *label_tour = NULL;
+lv_obj_t *arc = NULL;
+lv_obj_t *btn_switch1 = NULL;
+lv_obj_t *btn_switch2 = NULL;
+lv_obj_t *btn_reset = NULL;
+lv_obj_t *label_arc_value = NULL;
+
+
 
 lv_obj_t *icon = NULL;
+
+
+void show_page_tours();
+void show_page_arc();
+
+static void event_handler_switch(lv_event_t *e) {
+    // Change de page
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
+        if (lv_obj_is_visible(page_tours)) {
+            lv_obj_add_flag(page_tours, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(page_arc, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(page_arc, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(page_tours, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+}
+
+static void event_handler_reset(lv_event_t *e) {
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
+        bp = 1;
+        LV_LOG_USER("Appuie sur Reset tour");
+    }
+}
+
+void creer_page_tours() {
+    page_tours = lv_obj_create(lv_screen_active());
+    lv_obj_set_size(page_tours, LV_PCT(100), LV_PCT(100));
+
+    // Label tour au centre, gros
+    label_tour = lv_label_create(page_tours);
+    lv_obj_set_style_text_font(label_tour, LV_FONT_DEFAULT, 0); // Use the default built-in font
+    lv_label_set_text_fmt(label_tour, "Tours: %d", tour);
+    lv_obj_align(label_tour, LV_ALIGN_CENTER, 0, 0);
+
+    // Bouton reset tour
+    btn_reset = lv_button_create(page_tours);
+    lv_obj_align(btn_reset, LV_ALIGN_BOTTOM_LEFT, 20, -20);
+    lv_obj_add_event_cb(btn_reset, event_handler_reset, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *label_reset = lv_label_create(btn_reset);
+    lv_label_set_text(label_reset, "Reset tour");
+    lv_obj_center(label_reset);
+
+    // Bouton switch page
+    btn_switch1 = lv_button_create(page_tours);
+    lv_obj_align(btn_switch1, LV_ALIGN_BOTTOM_RIGHT, -20, -20);
+    lv_obj_add_event_cb(btn_switch1, event_handler_switch, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *label_switch1 = lv_label_create(btn_switch1);
+    lv_label_set_text(label_switch1, "Progression");
+    lv_obj_center(label_switch1);
+}
+
+void creer_page_arc() {
+    page_arc = lv_obj_create(lv_screen_active());
+    lv_obj_set_size(page_arc, LV_PCT(100), LV_PCT(100));
+
+    // Arc centré
+    arc = lv_arc_create(page_arc);
+    lv_obj_set_size(arc, 150, 150);
+    lv_obj_align(arc, LV_ALIGN_CENTER, 0, 0);
+    lv_arc_set_bg_angles(arc, 0, 360);
+    lv_arc_set_rotation(arc, 270);
+    lv_arc_set_range(arc, 0, 16383);
+    lv_arc_set_value(arc, 0);
+    lv_obj_remove_style(arc, NULL, LV_PART_KNOB);
+
+    // Label au centre de l'arc pour la valeur
+    label_arc_value = lv_label_create(page_arc);
+    lv_label_set_text(label_arc_value, "0");
+    lv_obj_align_to(label_arc_value, arc, LV_ALIGN_CENTER, 0, 0);
+
+
+    // Bouton switch page
+    btn_switch2 = lv_button_create(page_arc);
+    lv_obj_align(btn_switch2, LV_ALIGN_BOTTOM_RIGHT, -20, -20);
+    lv_obj_add_event_cb(btn_switch2, event_handler_switch, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *label_switch2 = lv_label_create(btn_switch2);
+    lv_label_set_text(label_switch2, "Tours");
+    lv_obj_center(label_switch2);
+}
 
 static void event_handler(lv_event_t *e)
 {
@@ -85,8 +177,6 @@ void boutonResetTour() {
 } 
 
 
-
-static lv_obj_t *label_tour = NULL;
 
 // void affichage_score_tour() {
 //   // Supprime le label précédent s'il existe
@@ -172,21 +262,21 @@ void affichage(void *pvParameters)
   while (1)
   {
     // Loop
-    lvglLock();
-    update_affichage_score_tour();
+
+    //update_affichage_score_tour();
     uint16_t position = as5047d_read();
+    lvglLock();
     maj_arc_progression(position);
     lvglUnlock();
 
     // Endort la tâche pendant le temps restant par rapport au réveil,
     // ici 200ms, donc la tâche s'effectue toutes les 200ms
-    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(100)); // toutes les 200 ms
+    //vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(100)); // toutes les 200 ms
+    vTaskDelay(pdMS_TO_TICKS(100)); // toutes les 100 ms
   }
 }
 
 
-
-lv_obj_t *arc = NULL;
 
 void creer_arc_progression() {
     // Crée un arc centré à l'écran
@@ -203,6 +293,11 @@ void creer_arc_progression() {
 void maj_arc_progression(uint16_t position) {
     if(arc) {
         lv_arc_set_value(arc, position);
+        if(label_arc_value) {
+            static char buf[8];
+            snprintf(buf, sizeof(buf), "%u", position);
+            lv_label_set_text(label_arc_value, buf);
+        }
     }
 }
 
@@ -350,9 +445,13 @@ void mySetup()
   //lv_obj_align(icon, LV_ALIGN_CENTER, 0, 0);
 
   //testLvgl();
-  init_affichage_score_tour();
-  boutonResetTour();
-  creer_arc_progression();
+      creer_page_tours();
+    creer_page_arc();
+    lv_obj_add_flag(page_arc, LV_OBJ_FLAG_HIDDEN); // On commence sur la page tours
+
+  //init_affichage_score_tour();
+  //boutonResetTour();
+  //creer_arc_progression();
   
 
 
