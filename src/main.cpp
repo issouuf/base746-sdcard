@@ -27,6 +27,10 @@ lv_obj_t *btn_switch1 = NULL;
 lv_obj_t *btn_switch2 = NULL;
 lv_obj_t *btn_reset = NULL;
 lv_obj_t *label_arc_value = NULL;
+lv_obj_t *page_roue = NULL;
+lv_obj_t *img_roue = NULL;
+lv_obj_t *rect_roue = NULL;
+lv_obj_t *btn_retour_roue = NULL;
 
 
 
@@ -42,8 +46,11 @@ static void event_handler_switch(lv_event_t *e) {
         if (lv_obj_is_visible(page_tours)) {
             lv_obj_add_flag(page_tours, LV_OBJ_FLAG_HIDDEN);
             lv_obj_clear_flag(page_arc, LV_OBJ_FLAG_HIDDEN);
-        } else {
+        } else if (lv_obj_is_visible(page_arc)) {
             lv_obj_add_flag(page_arc, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(page_roue, LV_OBJ_FLAG_HIDDEN);
+        } else if (lv_obj_is_visible(page_roue)) {
+            lv_obj_add_flag(page_roue, LV_OBJ_FLAG_HIDDEN);
             lv_obj_clear_flag(page_tours, LV_OBJ_FLAG_HIDDEN);
         }
     }
@@ -110,7 +117,57 @@ void creer_page_arc() {
     lv_obj_t *label_switch2 = lv_label_create(btn_switch2);
     lv_label_set_text(label_switch2, "Tours");
     lv_obj_center(label_switch2);
+
+    // Bouton pour aller à la page roue
+    lv_obj_t *btn_roue = lv_button_create(page_arc);
+    lv_obj_align(btn_roue, LV_ALIGN_BOTTOM_LEFT, 20, -20);
+    lv_obj_add_event_cb(btn_roue, event_handler_switch, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *label_roue = lv_label_create(btn_roue);
+    lv_label_set_text(label_roue, "Roue");
+    lv_obj_center(label_roue);
 }
+
+void creer_page_roue() {
+    page_roue = lv_obj_create(lv_screen_active());
+    lv_obj_set_size(page_roue, LV_PCT(100), LV_PCT(100));
+
+    // Image roue centrée
+    img_roue = lv_img_create(page_roue);
+    lv_img_set_src(img_roue, "A:/roue_250.bmp");
+    lv_obj_align(img_roue, LV_ALIGN_CENTER, 0, 0);
+
+    // Rectangle rouge centré sur la roue
+    rect_roue = lv_obj_create(page_roue);
+    lv_obj_set_size(rect_roue, 10, 65); // largeur, hauteur du rectangle
+    lv_obj_set_style_bg_color(rect_roue, lv_color_hex(0xFF0000), 0); // rouge
+    lv_obj_set_style_radius(rect_roue, 3, 0);
+    // Aligne le rectangle exactement au centre de la roue, sans décalage
+    lv_obj_align_to(rect_roue, img_roue, LV_ALIGN_CENTER, 0, -44);
+    lv_obj_set_style_border_width(rect_roue, 0, 0);
+
+
+    // Bouton retour
+    btn_retour_roue = lv_button_create(page_roue);
+    lv_obj_align(btn_retour_roue, LV_ALIGN_BOTTOM_LEFT, 20, -20);
+    lv_obj_add_event_cb(btn_retour_roue, event_handler_switch, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *label_retour = lv_label_create(btn_retour_roue);
+    lv_label_set_text(label_retour, "Retour");
+    lv_obj_center(label_retour);
+
+    // Cache la page au début
+    lv_obj_add_flag(page_roue, LV_OBJ_FLAG_HIDDEN);
+}
+
+void update_rect_roue_rotation(uint16_t position) {
+    if(rect_roue) {
+        int32_t angle = (position * 3600) / 16384;
+        lv_obj_set_style_transform_angle(rect_roue, angle, 0);
+        // Centre le pivot de rotation à la base, au milieu du rectangle
+        lv_obj_set_style_transform_pivot_x(rect_roue, lv_obj_get_width(rect_roue)/2, 0);
+        lv_obj_set_style_transform_pivot_y(rect_roue, lv_obj_get_height(rect_roue), 0);
+    }
+}
+
 
 static void event_handler(lv_event_t *e)
 {
@@ -178,18 +235,6 @@ void boutonResetTour() {
 
 
 
-// void affichage_score_tour() {
-//   // Supprime le label précédent s'il existe
-//   if (label_tour != NULL) {
-//     lv_obj_del(label_tour);
-//     label_tour = NULL;
-//   }
-//   // Crée un nouveau label
-//   label_tour = lv_label_create(lv_screen_active());
-//   lv_label_set_text_fmt(label_tour, "Tour: %d", tour);
-//   lv_obj_align(label_tour, LV_ALIGN_TOP_MID, 0, 10);
-// }
-
 void init_affichage_score_tour() {
   label_tour = lv_label_create(lv_screen_active());
   lv_label_set_text_fmt(label_tour, "Tour: %d", tour);
@@ -245,14 +290,6 @@ uint16_t command = 0xFFFF; // NOP pour récupérer la dernière valeur lue
 
 
 
-void update_image_rotation(uint16_t position) {
-    if(icon) {
-        // 0..16383 -> 0..3600 (dixièmes de degré)
-        int32_t angle = (position * 3600) / 16384;
-        lv_img_set_angle(icon, angle);
-    }
-}
-
 void affichage(void *pvParameters)
 {
   // Init
@@ -267,6 +304,7 @@ void affichage(void *pvParameters)
     uint16_t position = as5047d_read();
     lvglLock();
     maj_arc_progression(position);
+    update_rect_roue_rotation(position);
     lvglUnlock();
 
     // Endort la tâche pendant le temps restant par rapport au réveil,
@@ -439,15 +477,17 @@ void mySetup()
 
   /*From file*/
   // lv_image_set_src(icon, "A:/minion5.bmp");
-  //lv_image_set_src(icon, "A:/roue.bmp");
-  //lv_image_set_src(icon, LV_SYMBOL_EYE_OPEN);
+  // lv_image_set_src(icon, "A:/roue.bmp");
+  // lv_image_set_src(icon, LV_SYMBOL_EYE_OPEN);
 
   //lv_obj_align(icon, LV_ALIGN_CENTER, 0, 0);
 
   //testLvgl();
-      creer_page_tours();
-    creer_page_arc();
-    lv_obj_add_flag(page_arc, LV_OBJ_FLAG_HIDDEN); // On commence sur la page tours
+  creer_page_tours();
+  creer_page_arc();
+  creer_page_roue();
+  lv_obj_add_flag(page_arc, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_flag(page_roue, LV_OBJ_FLAG_HIDDEN);
 
   //init_affichage_score_tour();
   //boutonResetTour();
