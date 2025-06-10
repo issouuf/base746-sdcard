@@ -1,6 +1,6 @@
 #include "lvgl.h"
 #include "SPI.h"
-
+#include "lvglDrivers.h"
 
 #define MOSI D11
 #define MISO D12
@@ -10,9 +10,10 @@
 
 
 void update_affichage_score_tour(); 
+void maj_arc_progression(uint16_t position);
 
-int tour =0;
-int bp =0;
+volatile int tour =0;
+volatile int bp =0;
 uint16_t dernièrePosition = 0;
 
 
@@ -26,7 +27,8 @@ static void event_handler(lv_event_t *e)
   if (code == LV_EVENT_CLICKED)
   {
     //LV_LOG_USER("Clicked");
-    bp=1;
+   bp=1;
+   LV_LOG_USER("Appuie sur Reset tour");
     // update_affichage_score_tour();
   // }
   // else if (code == LV_EVENT_VALUE_CHANGED)
@@ -71,8 +73,10 @@ void boutonResetTour() {
 
   lv_obj_t *btn1 = lv_button_create(lv_screen_active());
   lv_obj_add_event_cb(btn1, event_handler, LV_EVENT_ALL, NULL);
-  lv_obj_align(btn1, LV_ALIGN_CENTER, 0, -40);
+  lv_obj_align(btn1, LV_ALIGN_CENTER, 0, 100);
   lv_obj_remove_flag(btn1, LV_OBJ_FLAG_PRESS_LOCK);
+
+  LV_LOG_USER("Bouton reset tour");
 
   label = lv_label_create(btn1);
   lv_label_set_text(label, "reset tour");
@@ -106,6 +110,7 @@ void init_affichage_score_tour() {
 void update_affichage_score_tour() {
   if(label_tour) {
     lv_label_set_text_fmt(label_tour, "Tour: %d", tour);
+    LV_LOG_USER("Tour: %d", tour);
   }
 }
 
@@ -149,6 +154,7 @@ uint16_t command = 0xFFFF; // NOP pour récupérer la dernière valeur lue
 
 
 
+
 void update_image_rotation(uint16_t position) {
     if(icon) {
         // 0..16383 -> 0..3600 (dixièmes de degré)
@@ -166,17 +172,39 @@ void affichage(void *pvParameters)
   while (1)
   {
     // Loop
+    lvglLock();
     update_affichage_score_tour();
-
+    uint16_t position = as5047d_read();
+    maj_arc_progression(position);
+    lvglUnlock();
 
     // Endort la tâche pendant le temps restant par rapport au réveil,
     // ici 200ms, donc la tâche s'effectue toutes les 200ms
-    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(200)); // toutes les 200 ms
+    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(100)); // toutes les 200 ms
   }
 }
 
 
 
+lv_obj_t *arc = NULL;
+
+void creer_arc_progression() {
+    // Crée un arc centré à l'écran
+    arc = lv_arc_create(lv_screen_active());
+    lv_obj_set_size(arc, 150, 150); // Taille du cercle
+    lv_obj_align(arc, LV_ALIGN_CENTER, 0, 0);
+    lv_arc_set_bg_angles(arc, 0, 360); // Cercle complet
+    lv_arc_set_rotation(arc, 270);     // Départ en haut
+    lv_arc_set_range(arc, 0, 16383);   // Plage de l'encodeur (AS5047D)
+    lv_arc_set_value(arc, 0);          // Valeur initiale
+    lv_obj_remove_style(arc, NULL, LV_PART_KNOB); // Cache le "bouton" central
+}
+
+void maj_arc_progression(uint16_t position) {
+    if(arc) {
+        lv_arc_set_value(arc, position);
+    }
+}
 
 void myTask(void *pvParameters)
 {
@@ -199,15 +227,26 @@ void myTask(void *pvParameters)
 
     if(bp ==1) {
       tour = 0;
+    lvglLock();
+    update_affichage_score_tour();
+    lvglUnlock();
       bp= 0;
     }
 
     else if(delta > 8192) {
       tour --;
+          lvglLock();
+    update_affichage_score_tour();
+    lvglUnlock();
     }else if (delta < -8192) {
       tour ++;
+    lvglLock();
+    update_affichage_score_tour();
+    lvglUnlock();
     }
     dernièrePosition = position;
+
+
 
     // Serial.print("Tour: ");
     // Serial.println(tour);
@@ -216,7 +255,8 @@ void myTask(void *pvParameters)
 
     // Endort la tâche pendant le temps restant par rapport au réveil,
     // ici 200ms, donc la tâche s'effectue toutes les 200ms
-    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(10)); // toutes les 10 ms
+//    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(10)); // toutes les 10 ms
+    vTaskDelay(pdMS_TO_TICKS(10)); // toutes les 10 ms
   }
 }
 
@@ -300,16 +340,19 @@ void mySetup()
 
   lv_tjpgd_init();
 
-  icon = lv_image_create(lv_screen_active());
+  //icon = lv_image_create(lv_screen_active());
 
   /*From file*/
-  lv_image_set_src(icon, "A:/minion5.bmp");
+  // lv_image_set_src(icon, "A:/minion5.bmp");
+  //lv_image_set_src(icon, "A:/roue.bmp");
+  //lv_image_set_src(icon, LV_SYMBOL_EYE_OPEN);
 
-  lv_obj_align(icon, LV_ALIGN_CENTER, 0, 0);
+  //lv_obj_align(icon, LV_ALIGN_CENTER, 0, 0);
 
   //testLvgl();
   init_affichage_score_tour();
   boutonResetTour();
+  creer_arc_progression();
   
 
 
