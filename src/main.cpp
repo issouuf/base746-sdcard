@@ -40,12 +40,13 @@ lv_obj_t *btn_lancer = NULL;
 lv_obj_t *btn_retour_tirage = NULL;
 lv_obj_t *btn_tirage = NULL;
 lv_obj_t *btn_roue = NULL;
+lv_obj_t *clavier_num = NULL;
 
 
 volatile bool tirage_en_cours = false;
 volatile int tirage_val = 0;
 volatile int tirage_min = 0;
-volatile int tirage_max = 100;
+volatile int tirage_max = 0;
 volatile uint16_t tirage_last_pos = 0;
 
 
@@ -104,14 +105,6 @@ static void event_handler_reset(lv_event_t *e) {
 }
 
 
-
-// static void event_handler_switch_tours(lv_event_t *e) {
-//     lv_obj_add_flag(page_tirage, LV_OBJ_FLAG_HIDDEN);
-//     lv_obj_clear_flag(page_tours, LV_OBJ_FLAG_HIDDEN);
-// }
-
-
-
 static void event_handler_lancer_tirage(lv_event_t *e) {
     // Récupère min et max
     tirage_min = lv_spinbox_get_value(spinbox_min);
@@ -123,8 +116,38 @@ static void event_handler_lancer_tirage(lv_event_t *e) {
     }
     tirage_en_cours = true;
     tirage_last_pos = as5047d_read();
-    lv_label_set_text(label_tirage_val, "Tourne la molette...");
 }
+
+
+void afficher_clavier_num(lv_obj_t *spinbox) {
+    if(clavier_num) {
+        lv_obj_del(clavier_num);
+        clavier_num = NULL;
+    }
+    clavier_num = lv_keyboard_create(lv_screen_active());
+    lv_keyboard_set_mode(clavier_num, LV_KEYBOARD_MODE_NUMBER);
+    lv_keyboard_set_textarea(clavier_num, spinbox);
+
+    // Fermer le clavier sur "Annuler"
+    lv_obj_add_event_cb(clavier_num, [](lv_event_t *e){
+        lv_obj_del(clavier_num);
+        clavier_num = NULL;
+    }, LV_EVENT_CANCEL, NULL);
+
+    // Fermer le clavier sur "OK" et mettre à jour la valeur du spinbox
+    lv_obj_add_event_cb(clavier_num, [](lv_event_t *e){
+        lv_obj_t *kb = (lv_obj_t *)lv_event_get_target(e);
+        lv_obj_t *ta = lv_keyboard_get_textarea(kb);
+        if(ta && lv_obj_check_type(ta, &lv_spinbox_class)) {
+            const char *txt = lv_textarea_get_text(ta);
+            int val = atoi(txt);
+            lv_spinbox_set_value(ta, val);
+        }
+        lv_obj_del(clavier_num);
+        clavier_num = NULL;
+    }, LV_EVENT_READY, NULL);
+}
+
 
 
 void creer_page_tours() {
@@ -154,6 +177,8 @@ void creer_page_tours() {
     lv_label_set_text(label_tirage, "Tirage");
     lv_obj_center(label_tirage);
 }
+
+
 
 void creer_page_arc() {
     page_arc = lv_obj_create(lv_screen_active());
@@ -188,6 +213,8 @@ void creer_page_arc() {
     lv_label_set_text(label_roue, "Roue");
     lv_obj_center(label_roue);
 }
+
+
 
 void creer_page_roue() {
     page_roue = lv_obj_create(lv_screen_active());
@@ -225,51 +252,60 @@ void creer_page_tirage() {
     page_tirage = lv_obj_create(lv_screen_active());
     lv_obj_set_size(page_tirage, LV_PCT(100), LV_PCT(100));
 
-    // Spinbox min
     lv_obj_t *label_min = lv_label_create(page_tirage);
     lv_label_set_text(label_min, "Min:");
     lv_obj_align(label_min, LV_ALIGN_TOP_LEFT, 20, 20);
 
     spinbox_min = lv_spinbox_create(page_tirage);
-    lv_spinbox_set_range(spinbox_min, 0, 9999);
+    lv_spinbox_set_range(spinbox_min, 0, 1);
     lv_spinbox_set_value(spinbox_min, 0);
     lv_obj_align_to(spinbox_min, label_min, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
 
-    // Spinbox max
     lv_obj_t *label_max = lv_label_create(page_tirage);
     lv_label_set_text(label_max, "Max:");
     lv_obj_align(label_max, LV_ALIGN_TOP_LEFT, 20, 70);
 
     spinbox_max = lv_spinbox_create(page_tirage);
-    lv_spinbox_set_range(spinbox_max, 0, 9999);
+    lv_spinbox_set_range(spinbox_max, 0, 100);
     lv_spinbox_set_value(spinbox_max, 100);
     lv_obj_align_to(spinbox_max, label_max, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
 
-    // Label pour le tirage
     label_tirage_val = lv_label_create(page_tirage);
     lv_label_set_text(label_tirage_val, "Appuie sur Lancer !");
     lv_obj_align(label_tirage_val, LV_ALIGN_CENTER, 0, -30);
 
-    // Bouton lancer
     btn_lancer = lv_button_create(page_tirage);
-    lv_obj_align(btn_lancer, LV_ALIGN_CENTER, 0, 40);
+    lv_obj_align(btn_lancer, LV_ALIGN_BOTTOM_RIGHT, -20, -20);
     lv_obj_add_event_cb(btn_lancer, event_handler_lancer_tirage, LV_EVENT_CLICKED, NULL);
     lv_obj_t *label_lancer = lv_label_create(btn_lancer);
     lv_label_set_text(label_lancer, "Lancer");
     lv_obj_center(label_lancer);
 
-    // Bouton retour
     btn_retour_tirage = lv_button_create(page_tirage);
     lv_obj_align(btn_retour_tirage, LV_ALIGN_BOTTOM_LEFT, 20, -20);
-    lv_obj_add_event_cb(btn_retour_tirage, event_handler_switch, LV_EVENT_CLICKED, page_tours);
     lv_obj_t *label_retour = lv_label_create(btn_retour_tirage);
     lv_label_set_text(label_retour, "Retour");
     lv_obj_center(label_retour);
 
-    
-    // Cache la page au début
     lv_obj_add_flag(page_tirage, LV_OBJ_FLAG_HIDDEN);
+
+        // Pour le spinbox min
+    lv_obj_add_event_cb(spinbox_min, [](lv_event_t *e){
+        if(lv_event_get_code(e) == LV_EVENT_FOCUSED) {
+            afficher_clavier_num(spinbox_min);
+        }
+    }, LV_EVENT_FOCUSED, NULL);
+
+    // Pour le spinbox max
+    lv_obj_add_event_cb(spinbox_max, [](lv_event_t *e){
+        if(lv_event_get_code(e) == LV_EVENT_FOCUSED) {
+            afficher_clavier_num(spinbox_max);
+        }
+    }, LV_EVENT_FOCUSED, NULL);
 }
+
+
+
 
 
 void connecter_boutons_navigation() {
@@ -394,9 +430,9 @@ void affichage(void *pvParameters)
     snprintf(buf, sizeof(buf), "Nombre: %d", val);
     lv_label_set_text(label_tirage_val, buf);
 
-    // Si l'encodeur est arrêté (delta < 30), on fige la valeur
+    // Si l'encodeur est arrêté (delta < 10), on fige la valeur
     if(delta < 10) {
-        snprintf(buf, sizeof(buf), "Tiré: %d", val);
+        snprintf(buf, sizeof(buf), "Tire: %d", val);
         lv_label_set_text(label_tirage_val, buf);
         tirage_en_cours = false;
       }
@@ -590,3 +626,4 @@ int main(void)
 }
 
 #endif
+
