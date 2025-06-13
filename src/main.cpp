@@ -31,6 +31,7 @@ lv_obj_t *page_roue = NULL;
 lv_obj_t *img_roue = NULL;
 lv_obj_t *rect_roue = NULL;
 lv_obj_t *btn_retour_roue = NULL;
+lv_obj_t *label_pourcentage = NULL;
 
 
 
@@ -109,6 +110,11 @@ void creer_page_arc() {
     lv_label_set_text(label_arc_value, "0");
     lv_obj_align_to(label_arc_value, arc, LV_ALIGN_CENTER, 0, 0);
 
+    label_pourcentage = lv_label_create(page_arc);
+    lv_label_set_text_fmt(label_pourcentage, "Pourcentage: %d%%", 0);
+    lv_obj_align_to(label_pourcentage, label_arc_value, LV_ALIGN_OUT_BOTTOM_MID, 0, -120);
+
+
 
     // Bouton switch page
     btn_switch2 = lv_button_create(page_arc);
@@ -175,14 +181,8 @@ static void event_handler(lv_event_t *e)
 
   if (code == LV_EVENT_CLICKED)
   {
-    //LV_LOG_USER("Clicked");
    bp=1;
    LV_LOG_USER("Appuie sur Reset tour");
-    // update_affichage_score_tour();
-  // }
-  // else if (code == LV_EVENT_VALUE_CHANGED)
-  // {
-  //   //LV_LOG_USER("Toggled");
    }
 }
 
@@ -307,26 +307,11 @@ void affichage(void *pvParameters)
     update_rect_roue_rotation(position);
     lvglUnlock();
 
-    // Endort la tâche pendant le temps restant par rapport au réveil,
-    // ici 200ms, donc la tâche s'effectue toutes les 200ms
-    //vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(100)); // toutes les 200 ms
-    vTaskDelay(pdMS_TO_TICKS(100)); // toutes les 100 ms
+    vTaskDelay(pdMS_TO_TICKS(10)); // toutes les 100 ms
   }
 }
 
 
-
-void creer_arc_progression() {
-    // Crée un arc centré à l'écran
-    arc = lv_arc_create(lv_screen_active());
-    lv_obj_set_size(arc, 150, 150); // Taille du cercle
-    lv_obj_align(arc, LV_ALIGN_CENTER, 0, 0);
-    lv_arc_set_bg_angles(arc, 0, 360); // Cercle complet
-    lv_arc_set_rotation(arc, 270);     // Départ en haut
-    lv_arc_set_range(arc, 0, 16383);   // Plage de l'encodeur (AS5047D)
-    lv_arc_set_value(arc, 0);          // Valeur initiale
-    lv_obj_remove_style(arc, NULL, LV_PART_KNOB); // Cache le "bouton" central
-}
 
 void maj_arc_progression(uint16_t position) {
     if(arc) {
@@ -335,6 +320,7 @@ void maj_arc_progression(uint16_t position) {
             static char buf[8];
             snprintf(buf, sizeof(buf), "%u", position);
             lv_label_set_text(label_arc_value, buf);
+            lv_label_set_text_fmt(label_pourcentage, "Pourcentage: %d%%", (position * 100) / 16383);
         }
     }
 }
@@ -378,16 +364,6 @@ void myTask(void *pvParameters)
     lvglUnlock();
     }
     dernièrePosition = position;
-
-
-
-    // Serial.print("Tour: ");
-    // Serial.println(tour);
-
-
-
-    // Endort la tâche pendant le temps restant par rapport au réveil,
-    // ici 200ms, donc la tâche s'effectue toutes les 200ms
 //    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(10)); // toutes les 10 ms
     vTaskDelay(pdMS_TO_TICKS(10)); // toutes les 10 ms
   }
@@ -473,14 +449,7 @@ void mySetup()
 
   lv_tjpgd_init();
 
-  //icon = lv_image_create(lv_screen_active());
 
-  /*From file*/
-  // lv_image_set_src(icon, "A:/minion5.bmp");
-  // lv_image_set_src(icon, "A:/roue.bmp");
-  // lv_image_set_src(icon, LV_SYMBOL_EYE_OPEN);
-
-  //lv_obj_align(icon, LV_ALIGN_CENTER, 0, 0);
 
   //testLvgl();
   creer_page_tours();
@@ -488,12 +457,6 @@ void mySetup()
   creer_page_roue();
   lv_obj_add_flag(page_arc, LV_OBJ_FLAG_HIDDEN);
   lv_obj_add_flag(page_roue, LV_OBJ_FLAG_HIDDEN);
-
-  //init_affichage_score_tour();
-  //boutonResetTour();
-  //creer_arc_progression();
-  
-
 
   xTaskCreate(affichage, "Affichage", 4096, NULL, 2, NULL);
 
