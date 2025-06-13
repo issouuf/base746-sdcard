@@ -32,14 +32,52 @@ lv_obj_t *img_roue = NULL;
 lv_obj_t *rect_roue = NULL;
 lv_obj_t *btn_retour_roue = NULL;
 lv_obj_t *label_pourcentage = NULL;
-
-
-
+lv_obj_t *page_tirage = NULL;
+lv_obj_t *spinbox_min = NULL;
+lv_obj_t *spinbox_max = NULL;
+lv_obj_t *label_tirage_val = NULL;
+lv_obj_t *btn_lancer = NULL;
+lv_obj_t *btn_retour_tirage = NULL;
 lv_obj_t *icon = NULL;
+
+
+
+volatile bool tirage_en_cours = false;
+volatile int tirage_val = 0;
+volatile int tirage_min = 0;
+volatile int tirage_max = 100;
+volatile uint16_t tirage_last_pos = 0;
+
+
 
 
 void show_page_tours();
 void show_page_arc();
+
+
+
+
+uint16_t as5047d_read() {
+uint16_t command = 0xFFFF; // NOP pour récupérer la dernière valeur lue
+  uint16_t angle = 0;
+
+  // 1. Envoi de la commande de lecture d'angle (0x3FFF)
+  digitalWrite(CS, LOW);
+  SPI.transfer16(0x3FFF);
+  digitalWrite(CS, HIGH);
+
+  delayMicroseconds(1);
+
+  // 2. Lecture de la réponse lors d'un NOP
+  digitalWrite(CS, LOW);
+  angle = SPI.transfer16(command);
+  digitalWrite(CS, HIGH);
+
+  // Les 14 bits de poids faible contiennent l'angle
+  return angle & 0x3FFF;
+}
+
+
 
 static void event_handler_switch(lv_event_t *e) {
     // Change de page
@@ -63,6 +101,30 @@ static void event_handler_reset(lv_event_t *e) {
         LV_LOG_USER("Appuie sur Reset tour");
     }
 }
+
+
+
+static void event_handler_switch_tours(lv_event_t *e) {
+    lv_obj_add_flag(page_tirage, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(page_tours, LV_OBJ_FLAG_HIDDEN);
+}
+
+
+
+static void event_handler_lancer_tirage(lv_event_t *e) {
+    // Récupère min et max
+    tirage_min = lv_spinbox_get_value(spinbox_min);
+    tirage_max = lv_spinbox_get_value(spinbox_max);
+    if(tirage_min > tirage_max) {
+        int tmp = tirage_min;
+        tirage_min = tirage_max;
+        tirage_max = tmp;
+    }
+    tirage_en_cours = true;
+    tirage_last_pos = as5047d_read();
+    lv_label_set_text(label_tirage_val, "Tourne la molette...");
+}
+
 
 void creer_page_tours() {
     page_tours = lv_obj_create(lv_screen_active());
@@ -89,6 +151,14 @@ void creer_page_tours() {
     lv_obj_t *label_switch1 = lv_label_create(btn_switch1);
     lv_label_set_text(label_switch1, "Progression");
     lv_obj_center(label_switch1);
+
+    // Bouton pour aller à la page tirage
+    lv_obj_t *btn_tirage = lv_button_create(page_tours);
+    lv_obj_align(btn_tirage, LV_ALIGN_BOTTOM_MID, 0, -20);
+    lv_obj_add_event_cb(btn_tirage, event_handler_switch, LV_EVENT_CLICKED, page_tirage);
+    lv_obj_t *label_tirage = lv_label_create(btn_tirage);
+    lv_label_set_text(label_tirage, "Tirage");
+    lv_obj_center(label_tirage);
 }
 
 void creer_page_arc() {
@@ -164,6 +234,61 @@ void creer_page_roue() {
     lv_obj_add_flag(page_roue, LV_OBJ_FLAG_HIDDEN);
 }
 
+
+void creer_page_tirage() {
+    page_tirage = lv_obj_create(lv_screen_active());
+    lv_obj_set_size(page_tirage, LV_PCT(100), LV_PCT(100));
+
+    // Spinbox min
+    lv_obj_t *label_min = lv_label_create(page_tirage);
+    lv_label_set_text(label_min, "Min:");
+    lv_obj_align(label_min, LV_ALIGN_TOP_LEFT, 20, 20);
+
+    spinbox_min = lv_spinbox_create(page_tirage);
+    lv_spinbox_set_range(spinbox_min, 0, 9999);
+    lv_spinbox_set_value(spinbox_min, 0);
+    lv_obj_align_to(spinbox_min, label_min, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
+
+    // Spinbox max
+    lv_obj_t *label_max = lv_label_create(page_tirage);
+    lv_label_set_text(label_max, "Max:");
+    lv_obj_align(label_max, LV_ALIGN_TOP_LEFT, 20, 70);
+
+    spinbox_max = lv_spinbox_create(page_tirage);
+    lv_spinbox_set_range(spinbox_max, 0, 9999);
+    lv_spinbox_set_value(spinbox_max, 100);
+    lv_obj_align_to(spinbox_max, label_max, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
+
+    // Label pour le tirage
+    label_tirage_val = lv_label_create(page_tirage);
+    lv_label_set_text(label_tirage_val, "Appuie sur Lancer !");
+    lv_obj_align(label_tirage_val, LV_ALIGN_CENTER, 0, -30);
+
+    // Bouton lancer
+    btn_lancer = lv_button_create(page_tirage);
+    lv_obj_align(btn_lancer, LV_ALIGN_CENTER, 0, 40);
+    lv_obj_add_event_cb(btn_lancer, event_handler_lancer_tirage, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *label_lancer = lv_label_create(btn_lancer);
+    lv_label_set_text(label_lancer, "Lancer");
+    lv_obj_center(label_lancer);
+
+    // Bouton retour
+    btn_retour_tirage = lv_button_create(page_tirage);
+    lv_obj_align(btn_retour_tirage, LV_ALIGN_BOTTOM_LEFT, 20, -20);
+    lv_obj_add_event_cb(btn_retour_tirage, event_handler_switch_tours, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *label_retour = lv_label_create(btn_retour_tirage);
+    lv_label_set_text(label_retour, "Retour");
+    lv_obj_center(label_retour);
+
+    
+    // Cache la page au début
+    lv_obj_add_flag(page_tirage, LV_OBJ_FLAG_HIDDEN);
+}
+
+
+
+
+
 void update_rect_roue_rotation(uint16_t position) {
     if(rect_roue) {
         int32_t angle = (position * 3600) / 16384;
@@ -184,35 +309,6 @@ static void event_handler(lv_event_t *e)
    bp=1;
    LV_LOG_USER("Appuie sur Reset tour");
    }
-}
-
-void testLvgl()
-
-
-
-
-{
-  // Initialisations générales
-  lv_obj_t *label;
-
-  lv_obj_t *btn1 = lv_button_create(lv_screen_active());
-  lv_obj_add_event_cb(btn1, event_handler, LV_EVENT_ALL, NULL);
-  lv_obj_align(btn1, LV_ALIGN_CENTER, 0, -40);
-  lv_obj_remove_flag(btn1, LV_OBJ_FLAG_PRESS_LOCK);
-
-  label = lv_label_create(btn1);
-  lv_label_set_text(label, "reset tour");
-  lv_obj_center(label);
-
-  // lv_obj_t *btn2 = lv_button_create(lv_screen_active());
-  // lv_obj_add_event_cb(btn2, event_handler, LV_EVENT_ALL, NULL);
-  // lv_obj_align(btn2, LV_ALIGN_CENTER, 0, 40);
-  // lv_obj_add_flag(btn2, LV_OBJ_FLAG_CHECKABLE);
-  // lv_obj_set_height(btn2, LV_SIZE_CONTENT);
-
-  // label = lv_label_create(btn2);
-  // lv_label_set_text(label, "Toggle");
-  // lv_obj_center(label);
 }
 
 
@@ -267,25 +363,6 @@ void as5047d_init() {
 }
 
 
-uint16_t as5047d_read() {
-uint16_t command = 0xFFFF; // NOP pour récupérer la dernière valeur lue
-  uint16_t angle = 0;
-
-  // 1. Envoi de la commande de lecture d'angle (0x3FFF)
-  digitalWrite(CS, LOW);
-  SPI.transfer16(0x3FFF);
-  digitalWrite(CS, HIGH);
-
-  delayMicroseconds(1);
-
-  // 2. Lecture de la réponse lors d'un NOP
-  digitalWrite(CS, LOW);
-  angle = SPI.transfer16(command);
-  digitalWrite(CS, HIGH);
-
-  // Les 14 bits de poids faible contiennent l'angle
-  return angle & 0x3FFF;
-}
 
 
 
@@ -305,9 +382,30 @@ void affichage(void *pvParameters)
     lvglLock();
     maj_arc_progression(position);
     update_rect_roue_rotation(position);
+    
+
+
+    if (tirage_en_cours) {
+    int delta = abs((int)position - (int)tirage_last_pos);
+    int range = tirage_max - tirage_min + 1;
+    if(range <= 0) range = 1;
+    // Fait défiler le nombre
+    int val = tirage_min + (position % range);
+    static char buf[32];
+    snprintf(buf, sizeof(buf), "Nombre: %d", val);
+    lv_label_set_text(label_tirage_val, buf);
+
+    // Si l'encodeur est arrêté (delta < 30), on fige la valeur
+    if(delta < 30) {
+        snprintf(buf, sizeof(buf), "Tiré: %d", val);
+        lv_label_set_text(label_tirage_val, buf);
+        tirage_en_cours = false;
+      }
+    tirage_last_pos = position;
+    }
     lvglUnlock();
 
-    vTaskDelay(pdMS_TO_TICKS(10)); // toutes les 100 ms
+    vTaskDelay(pdMS_TO_TICKS(5)); // toutes les 100 ms
   }
 }
 
@@ -365,9 +463,10 @@ void myTask(void *pvParameters)
     }
     dernièrePosition = position;
 //    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(10)); // toutes les 10 ms
-    vTaskDelay(pdMS_TO_TICKS(10)); // toutes les 10 ms
+    vTaskDelay(pdMS_TO_TICKS(5)); // toutes les 10 ms
   }
 }
+
 
 
 
@@ -455,6 +554,7 @@ void mySetup()
   creer_page_tours();
   creer_page_arc();
   creer_page_roue();
+  creer_page_tirage();
   lv_obj_add_flag(page_arc, LV_OBJ_FLAG_HIDDEN);
   lv_obj_add_flag(page_roue, LV_OBJ_FLAG_HIDDEN);
 
