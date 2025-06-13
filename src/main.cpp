@@ -38,8 +38,8 @@ lv_obj_t *spinbox_max = NULL;
 lv_obj_t *label_tirage_val = NULL;
 lv_obj_t *btn_lancer = NULL;
 lv_obj_t *btn_retour_tirage = NULL;
-lv_obj_t *icon = NULL;
-
+lv_obj_t *btn_tirage = NULL;
+lv_obj_t *btn_roue = NULL;
 
 
 volatile bool tirage_en_cours = false;
@@ -80,17 +80,18 @@ uint16_t command = 0xFFFF; // NOP pour récupérer la dernière valeur lue
 
 
 static void event_handler_switch(lv_event_t *e) {
-    // Change de page
     if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
-        if (lv_obj_is_visible(page_tours)) {
-            lv_obj_add_flag(page_tours, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_clear_flag(page_arc, LV_OBJ_FLAG_HIDDEN);
-        } else if (lv_obj_is_visible(page_arc)) {
-            lv_obj_add_flag(page_arc, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_clear_flag(page_roue, LV_OBJ_FLAG_HIDDEN);
-        } else if (lv_obj_is_visible(page_roue)) {
-            lv_obj_add_flag(page_roue, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_clear_flag(page_tours, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_t *target_page = (lv_obj_t *)lv_event_get_user_data(e);
+        // Cache toutes les pages (si elles existent)
+        if(page_tours) lv_obj_add_flag(page_tours, LV_OBJ_FLAG_HIDDEN);
+        if(page_arc) lv_obj_add_flag(page_arc, LV_OBJ_FLAG_HIDDEN);
+        if(page_roue) lv_obj_add_flag(page_roue, LV_OBJ_FLAG_HIDDEN);
+        if(page_tirage) lv_obj_add_flag(page_tirage, LV_OBJ_FLAG_HIDDEN);
+        // Affiche la page cible (seulement si elle existe)
+        if(target_page) {
+            lv_obj_clear_flag(target_page, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            LV_LOG_ERROR("Page cible NULL dans event_handler_switch !");
         }
     }
 }
@@ -104,10 +105,10 @@ static void event_handler_reset(lv_event_t *e) {
 
 
 
-static void event_handler_switch_tours(lv_event_t *e) {
-    lv_obj_add_flag(page_tirage, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_clear_flag(page_tours, LV_OBJ_FLAG_HIDDEN);
-}
+// static void event_handler_switch_tours(lv_event_t *e) {
+//     lv_obj_add_flag(page_tirage, LV_OBJ_FLAG_HIDDEN);
+//     lv_obj_clear_flag(page_tours, LV_OBJ_FLAG_HIDDEN);
+// }
 
 
 
@@ -130,13 +131,10 @@ void creer_page_tours() {
     page_tours = lv_obj_create(lv_screen_active());
     lv_obj_set_size(page_tours, LV_PCT(100), LV_PCT(100));
 
-    // Label tour au centre, gros
     label_tour = lv_label_create(page_tours);
-    lv_obj_set_style_text_font(label_tour, LV_FONT_DEFAULT, 0); // Use the default built-in font
     lv_label_set_text_fmt(label_tour, "Tours: %d", tour);
     lv_obj_align(label_tour, LV_ALIGN_CENTER, 0, 0);
 
-    // Bouton reset tour
     btn_reset = lv_button_create(page_tours);
     lv_obj_align(btn_reset, LV_ALIGN_BOTTOM_LEFT, 20, -20);
     lv_obj_add_event_cb(btn_reset, event_handler_reset, LV_EVENT_CLICKED, NULL);
@@ -144,18 +142,14 @@ void creer_page_tours() {
     lv_label_set_text(label_reset, "Reset tour");
     lv_obj_center(label_reset);
 
-    // Bouton switch page
     btn_switch1 = lv_button_create(page_tours);
     lv_obj_align(btn_switch1, LV_ALIGN_BOTTOM_RIGHT, -20, -20);
-    lv_obj_add_event_cb(btn_switch1, event_handler_switch, LV_EVENT_CLICKED, NULL);
     lv_obj_t *label_switch1 = lv_label_create(btn_switch1);
     lv_label_set_text(label_switch1, "Progression");
     lv_obj_center(label_switch1);
 
-    // Bouton pour aller à la page tirage
-    lv_obj_t *btn_tirage = lv_button_create(page_tours);
+    btn_tirage = lv_button_create(page_tours);
     lv_obj_align(btn_tirage, LV_ALIGN_BOTTOM_MID, 0, -20);
-    lv_obj_add_event_cb(btn_tirage, event_handler_switch, LV_EVENT_CLICKED, page_tirage);
     lv_obj_t *label_tirage = lv_label_create(btn_tirage);
     lv_label_set_text(label_tirage, "Tirage");
     lv_obj_center(label_tirage);
@@ -165,7 +159,6 @@ void creer_page_arc() {
     page_arc = lv_obj_create(lv_screen_active());
     lv_obj_set_size(page_arc, LV_PCT(100), LV_PCT(100));
 
-    // Arc centré
     arc = lv_arc_create(page_arc);
     lv_obj_set_size(arc, 150, 150);
     lv_obj_align(arc, LV_ALIGN_CENTER, 0, 0);
@@ -175,7 +168,6 @@ void creer_page_arc() {
     lv_arc_set_value(arc, 0);
     lv_obj_remove_style(arc, NULL, LV_PART_KNOB);
 
-    // Label au centre de l'arc pour la valeur
     label_arc_value = lv_label_create(page_arc);
     lv_label_set_text(label_arc_value, "0");
     lv_obj_align_to(label_arc_value, arc, LV_ALIGN_CENTER, 0, 0);
@@ -184,20 +176,14 @@ void creer_page_arc() {
     lv_label_set_text_fmt(label_pourcentage, "Pourcentage: %d%%", 0);
     lv_obj_align_to(label_pourcentage, label_arc_value, LV_ALIGN_OUT_BOTTOM_MID, 0, -120);
 
-
-
-    // Bouton switch page
     btn_switch2 = lv_button_create(page_arc);
     lv_obj_align(btn_switch2, LV_ALIGN_BOTTOM_RIGHT, -20, -20);
-    lv_obj_add_event_cb(btn_switch2, event_handler_switch, LV_EVENT_CLICKED, NULL);
     lv_obj_t *label_switch2 = lv_label_create(btn_switch2);
     lv_label_set_text(label_switch2, "Tours");
     lv_obj_center(label_switch2);
 
-    // Bouton pour aller à la page roue
-    lv_obj_t *btn_roue = lv_button_create(page_arc);
+    btn_roue = lv_button_create(page_arc);
     lv_obj_align(btn_roue, LV_ALIGN_BOTTOM_LEFT, 20, -20);
-    lv_obj_add_event_cb(btn_roue, event_handler_switch, LV_EVENT_CLICKED, NULL);
     lv_obj_t *label_roue = lv_label_create(btn_roue);
     lv_label_set_text(label_roue, "Roue");
     lv_obj_center(label_roue);
@@ -222,10 +208,10 @@ void creer_page_roue() {
     lv_obj_set_style_border_width(rect_roue, 0, 0);
 
 
-    // Bouton retour
+    // Bouton retour (vers progression)
     btn_retour_roue = lv_button_create(page_roue);
     lv_obj_align(btn_retour_roue, LV_ALIGN_BOTTOM_LEFT, 20, -20);
-    lv_obj_add_event_cb(btn_retour_roue, event_handler_switch, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(btn_retour_roue, event_handler_switch, LV_EVENT_CLICKED, page_arc);
     lv_obj_t *label_retour = lv_label_create(btn_retour_roue);
     lv_label_set_text(label_retour, "Retour");
     lv_obj_center(label_retour);
@@ -275,7 +261,7 @@ void creer_page_tirage() {
     // Bouton retour
     btn_retour_tirage = lv_button_create(page_tirage);
     lv_obj_align(btn_retour_tirage, LV_ALIGN_BOTTOM_LEFT, 20, -20);
-    lv_obj_add_event_cb(btn_retour_tirage, event_handler_switch_tours, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(btn_retour_tirage, event_handler_switch, LV_EVENT_CLICKED, page_tours);
     lv_obj_t *label_retour = lv_label_create(btn_retour_tirage);
     lv_label_set_text(label_retour, "Retour");
     lv_obj_center(label_retour);
@@ -286,7 +272,20 @@ void creer_page_tirage() {
 }
 
 
-
+void connecter_boutons_navigation() {
+    if(btn_switch1 && page_arc)
+        lv_obj_add_event_cb(btn_switch1, event_handler_switch, LV_EVENT_CLICKED, page_arc);
+    if(btn_switch2 && page_tours)
+        lv_obj_add_event_cb(btn_switch2, event_handler_switch, LV_EVENT_CLICKED, page_tours);
+    if(btn_tirage && page_tirage)
+        lv_obj_add_event_cb(btn_tirage, event_handler_switch, LV_EVENT_CLICKED, page_tirage);
+    if(btn_retour_tirage && page_tours)
+        lv_obj_add_event_cb(btn_retour_tirage, event_handler_switch, LV_EVENT_CLICKED, page_tours);
+    if(btn_roue && page_roue)
+        lv_obj_add_event_cb(btn_roue, event_handler_switch, LV_EVENT_CLICKED, page_roue);
+    if(btn_retour_roue && page_arc)
+        lv_obj_add_event_cb(btn_retour_roue, event_handler_switch, LV_EVENT_CLICKED, page_arc);
+}
 
 
 void update_rect_roue_rotation(uint16_t position) {
@@ -396,7 +395,7 @@ void affichage(void *pvParameters)
     lv_label_set_text(label_tirage_val, buf);
 
     // Si l'encodeur est arrêté (delta < 30), on fige la valeur
-    if(delta < 30) {
+    if(delta < 10) {
         snprintf(buf, sizeof(buf), "Tiré: %d", val);
         lv_label_set_text(label_tirage_val, buf);
         tirage_en_cours = false;
@@ -555,8 +554,11 @@ void mySetup()
   creer_page_arc();
   creer_page_roue();
   creer_page_tirage();
+  connecter_boutons_navigation();
+
   lv_obj_add_flag(page_arc, LV_OBJ_FLAG_HIDDEN);
   lv_obj_add_flag(page_roue, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_flag(page_tirage, LV_OBJ_FLAG_HIDDEN);
 
   xTaskCreate(affichage, "Affichage", 4096, NULL, 2, NULL);
 
