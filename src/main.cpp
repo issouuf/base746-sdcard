@@ -272,7 +272,7 @@ void creer_page_tirage() {
 
     label_tirage_val = lv_label_create(page_tirage);
     lv_label_set_text(label_tirage_val, "Appuie sur Lancer !");
-    lv_obj_align(label_tirage_val, LV_ALIGN_CENTER, 0, -30);
+    lv_obj_align(label_tirage_val, LV_ALIGN_CENTER, 0, 30);
 
     btn_lancer = lv_button_create(page_tirage);
     lv_obj_align(btn_lancer, LV_ALIGN_BOTTOM_RIGHT, -20, -20);
