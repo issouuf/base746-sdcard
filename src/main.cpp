@@ -324,16 +324,21 @@ void connecter_boutons_navigation() {
 }
 
 
+
 void update_rect_roue_rotation(uint16_t position) {
+    const int NB_CASES = 38;
+    const int ENCODER_MAX = 16384;
+    int secteur = ENCODER_MAX / NB_CASES;
+    int case_idx = position / secteur;
+    int centre = case_idx * secteur + secteur / 2;
+    int32_t angle = (centre * 3600) / ENCODER_MAX;
+
     if(rect_roue) {
-        int32_t angle = (position * 3600) / 16384;
         lv_obj_set_style_transform_angle(rect_roue, angle, 0);
-        // Centre le pivot de rotation à la base, au milieu du rectangle
         lv_obj_set_style_transform_pivot_x(rect_roue, lv_obj_get_width(rect_roue)/2, 0);
         lv_obj_set_style_transform_pivot_y(rect_roue, lv_obj_get_height(rect_roue), 0);
     }
 }
-
 
 static void event_handler(lv_event_t *e)
 {
